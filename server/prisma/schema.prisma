@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   // "ADMIN", "FACULTY", "STUDENT"
+  createdAt DateTime @default(now())
+
+  // Relations based on role
+  facultyProfile Faculty?
+  studentProfile Student?
+}
+
+model Department {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique // e.g., "AIML", "CSE"
+  classes   Class[]
+  faculties Faculty[]
+  subjects  Subject[]
+}
+
+model Class {
+  id           Int        @id @default(autoincrement())
+  year         Int        // 1, 2, 3, 4
+  section      String     // "A", "B"
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+  students     Student[]
+  
+  // Who is the Class Advisor?
+  advisorId    Int?       @unique 
+  advisor      Faculty?   @relation("ClassAdvisor", fields: [advisorId], references: [id])
+
+  assignments FacultyAssignment[]
+
+  @@unique([departmentId, year, section])
+}
+
+model Subject {
+  id           Int         @id @default(autoincrement())
+  name         String      // e.g., "AI", "Python", "Physics"
+  code         String?
+  type         String      @default("THEORY") // "THEORY", "LAB", "LIBRARY", "FEES", "INNOVATION"
+  departmentId Int
+  department   Department  @relation(fields: [departmentId], references: [id])
+
+  assignments FacultyAssignment[]
+  noDueRecords NoDueRecord[]
+}
+
+model Faculty {
+  id           Int        @id @default(autoincrement())
+  userId       Int        @unique
+  user         User       @relation(fields: [userId], references: [id])
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  // Assignments (Subjects they teach to specific classes)
+  assignments FacultyAssignment[]
+  
+  // Class Advisor Role
+  advisorClass Class? @relation("ClassAdvisor")
+}
+
+model Student {
+  id           Int        @id @default(autoincrement())
+  userId       Int        @unique
+  user         User       @relation(fields: [userId], references: [id])
+  rollNumber   String     @unique
+  classId      Int
+  class        Class      @relation(fields: [classId], references: [id])
+
+  noDueRecords NoDueRecord[]
+  feeStatus    FeeStatus?
+}
+
+model FacultyAssignment {
+  id        Int     @id @default(autoincrement())
+  facultyId Int
+  faculty   Faculty @relation(fields: [facultyId], references: [id])
+  subjectId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  classId   Int
+  class     Class   @relation(fields: [classId], references: [id])
+
+  @@unique([facultyId, subjectId, classId])
+}
+
+model NoDueRecord {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  subjectId Int
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  status    String   @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  updatedAt DateTime @updatedAt
+  
+  // Optional: Track who approved it if needed, but normally implied by Subject Faculty
+  approvedBy Int?    // Faculty ID
+
+  @@unique([studentId, subjectId])
+}
+
+model FeeStatus {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @unique
+  student   Student  @relation(fields: [studentId], references: [id])
+  status    String   @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  updatedAt DateTime @updatedAt
+}

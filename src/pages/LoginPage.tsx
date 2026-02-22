@@ -20,10 +20,10 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) return;
-    const success = login(selectedRole, id, password);
+    const success = await login(selectedRole, id, password);
     if (!success) {
       setError("Invalid credentials. Please try again.");
     }

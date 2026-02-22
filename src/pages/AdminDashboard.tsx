@@ -81,40 +81,44 @@ const AdminDashboard: React.FC = () => {
     };
   };
 
-  const handleFileUpload = (type: "academic" | "students" | "faculty", file: File) => {
+  const handleFileUpload = async (type: "academic" | "students" | "faculty", file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     const isExcel = ext === "xlsx" || ext === "xls" || ext === "csv";
+    setUploadStatus(prev => ({ ...prev, [type]: "↑ Uploading..." }));
 
-    if (isExcel) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          if (type === "students") setStudents(parseExcelStudents(sheet));
-          else if (type === "faculty") setFaculty(parseExcelFaculty(sheet));
-          else setAcademicStructure(parseExcelAcademic(workbook));
-          setUploadStatus(prev => ({ ...prev, [type]: "✓ Uploaded (Excel)" }));
-        } catch {
-          setUploadStatus(prev => ({ ...prev, [type]: "✗ Invalid Excel file" }));
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const jsonData = JSON.parse(e.target?.result as string);
-          if (type === "academic") setAcademicStructure(jsonData as AcademicStructure);
-          else if (type === "students") setStudents(jsonData as Student[]);
-          else setFaculty(jsonData as Faculty[]);
-          setUploadStatus(prev => ({ ...prev, [type]: "✓ Uploaded" }));
-        } catch {
-          setUploadStatus(prev => ({ ...prev, [type]: "✗ Invalid JSON" }));
-        }
-      };
-      reader.readAsText(file);
+    try {
+      if (isExcel) {
+        const reader = new FileReader();
+        const arrayBuffer = await new Promise<ArrayBuffer>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
+          reader.readAsArrayBuffer(file);
+        });
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+        if (type === "students") await setStudents(parseExcelStudents(sheet));
+        else if (type === "faculty") await setFaculty(parseExcelFaculty(sheet));
+        else await setAcademicStructure(parseExcelAcademic(workbook));
+
+        setUploadStatus(prev => ({ ...prev, [type]: "✓ Uploaded (Excel)" }));
+      } else {
+        const reader = new FileReader();
+        const content = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsText(file);
+        });
+        const jsonData = JSON.parse(content);
+
+        if (type === "academic") await setAcademicStructure(jsonData as AcademicStructure);
+        else if (type === "students") await setStudents(jsonData as Student[]);
+        else await setFaculty(jsonData as Faculty[]);
+
+        setUploadStatus(prev => ({ ...prev, [type]: "✓ Uploaded" }));
+      }
+    } catch (err) {
+      console.error("Upload failed", err);
+      setUploadStatus(prev => ({ ...prev, [type]: "✗ Upload Failed" }));
     }
   };
 

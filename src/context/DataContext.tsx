@@ -1,8 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { AcademicStructure, Student, Faculty, AuthState, UserRole, NoDueRecord } from "@/types/academic";
-
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "admin123";
+import { api } from "@/lib/api";
 
 interface DataContextType {
   academicStructure: AcademicStructure | null;
@@ -10,18 +8,18 @@ interface DataContextType {
   faculty: Faculty[];
   noDueRecords: NoDueRecord[];
   auth: AuthState;
-  setAcademicStructure: (data: AcademicStructure) => void;
-  setStudents: (data: Student[]) => void;
-  setFaculty: (data: Faculty[]) => void;
-  login: (role: UserRole, id: string, password: string) => boolean;
+  setAcademicStructure: (data: AcademicStructure) => Promise<void>;
+  setStudents: (data: Student[]) => Promise<void>;
+  setFaculty: (data: Faculty[]) => Promise<void>;
+  login: (role: UserRole, id: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateStudents: (updater: (prev: Student[]) => Student[]) => void;
   updateFaculty: (updater: (prev: Faculty[]) => Faculty[]) => void;
   updateAcademicStructure: (updater: (prev: AcademicStructure) => AcademicStructure) => void;
-  setNoDueStatus: (studentId: string, facultyId: string, subject: string, dept: string, year: number, section: string, status: "cleared" | "pending", message?: string) => void;
-  updateNoDueMessage: (studentId: string, subject: string, message: string) => void;
+  setNoDueStatus: (studentId: string, facultyId: string, subject: string, dept: string, year: number, section: string, status: "cleared" | "pending", message?: string) => Promise<void>;
+  updateNoDueMessage: (studentId: string, subject: string, message: string) => Promise<void>;
   getNoDueRecord: (studentId: string, subject: string) => NoDueRecord | undefined;
-  resetAllData: () => void;
+  resetAllData: () => Promise<void>;
   isDataLoaded: boolean;
 }
 
@@ -34,163 +32,177 @@ export const useData = () => {
 };
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [academicStructure, setAcademicStructureState] = useState<AcademicStructure | null>(() => {
-    const saved = localStorage.getItem("academic_structure");
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const [students, setStudentsState] = useState<Student[]>(() => {
-    const saved = localStorage.getItem("students");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [faculty, setFacultyState] = useState<Faculty[]>(() => {
-    const saved = localStorage.getItem("faculty");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [noDueRecords, setNoDueRecordsState] = useState<NoDueRecord[]>(() => {
-    const saved = localStorage.getItem("no_due_records");
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [academicStructure, setAcademicStructureState] = useState<AcademicStructure | null>(null);
+  const [students, setStudentsState] = useState<Student[]>([]);
+  const [faculty, setFacultyState] = useState<Faculty[]>([]);
+  const [noDueRecords, setNoDueRecordsState] = useState<NoDueRecord[]>([]);
   const [auth, setAuth] = useState<AuthState>(() => {
     const saved = localStorage.getItem("auth");
     return saved ? JSON.parse(saved) : { isLoggedIn: false, role: null, userId: null };
   });
 
-  const setAcademicStructure = useCallback((data: AcademicStructure) => {
-    setAcademicStructureState(data);
-    localStorage.setItem("academic_structure", JSON.stringify(data));
+  const fetchData = useCallback(async () => {
+    if (!auth.isLoggedIn) return;
+    try {
+      const structure = await api.get('/academic/structure');
+      setAcademicStructureState({ departments: structure });
+
+      if (auth.role === 'admin') {
+        const [studentsData, facultyData] = await Promise.all([
+          api.get('/academic/students'),
+          api.get('/academic/faculty')
+        ]);
+        setStudentsState(studentsData);
+        setFacultyState(facultyData);
+      } else if (auth.role === 'student') {
+        const [records, profile] = await Promise.all([
+          api.get('/nodue/student-records'),
+          api.get('/academic/profile')
+        ]);
+        setNoDueRecordsState(records.map((r: any) => ({
+          student_id: auth.userId,
+          faculty_id: r.subject.facultyId,
+          subject: r.subject.name,
+          status: r.status,
+          message: r.message
+        })));
+        setStudentsState([profile]);
+      } else if (auth.role === 'faculty') {
+        const profile = await api.get('/academic/profile');
+        setFacultyState([profile]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch data", err);
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const login = useCallback(async (role: UserRole, id: string, password: string): Promise<boolean> => {
+    try {
+      const res = await api.post('/auth/login', { username: id, password, role });
+      const newAuth = {
+        isLoggedIn: true,
+        role: res.user.role.toLowerCase() as UserRole,
+        userId: id
+      };
+      setAuth(newAuth);
+      localStorage.setItem("auth", JSON.stringify(newAuth));
+      localStorage.setItem("token", res.token);
+      return true;
+    } catch (err) {
+      console.error("Login failed", err);
+      return false;
+    }
   }, []);
 
-  const setStudents = useCallback((data: Student[]) => {
-    setStudentsState(data);
-    localStorage.setItem("students", JSON.stringify(data));
+  const logout = useCallback(() => {
+    const newAuth = { isLoggedIn: false, role: null, userId: null };
+    setAuth(newAuth);
+    localStorage.removeItem("auth");
+    localStorage.removeItem("token");
+    setAcademicStructureState(null);
+    setStudentsState([]);
+    setFacultyState([]);
+    setNoDueRecordsState([]);
   }, []);
 
-  const setFaculty = useCallback((data: Faculty[]) => {
-    setFacultyState(data);
-    localStorage.setItem("faculty", JSON.stringify(data));
+  const setAcademicStructure = useCallback(async (data: AcademicStructure) => {
+    try {
+      await api.post('/academic/upload-structure', data);
+      setAcademicStructureState(data);
+    } catch (err) {
+      console.error("Upload failed", err);
+    }
   }, []);
 
-  const updateStudents = useCallback((updater: (prev: Student[]) => Student[]) => {
-    setStudentsState(prev => {
-      const updated = updater(prev);
-      localStorage.setItem("students", JSON.stringify(updated));
-      return updated;
-    });
+  const setStudents = useCallback(async (data: Student[]) => {
+    try {
+      await api.post('/academic/upload-students', { students: data });
+      setStudentsState(data);
+    } catch (err) {
+      console.error("Upload failed", err);
+    }
   }, []);
 
-  const updateFaculty = useCallback((updater: (prev: Faculty[]) => Faculty[]) => {
-    setFacultyState(prev => {
-      const updated = updater(prev);
-      localStorage.setItem("faculty", JSON.stringify(updated));
-      return updated;
-    });
+  const setFaculty = useCallback(async (data: Faculty[]) => {
+    try {
+      await api.post('/academic/upload-faculty', { faculty: data });
+      setFacultyState(data);
+    } catch (err) {
+      console.error("Upload failed", err);
+    }
   }, []);
 
-  const updateAcademicStructure = useCallback((updater: (prev: AcademicStructure) => AcademicStructure) => {
-    setAcademicStructureState(prev => {
-      if (!prev) return prev;
-      const updated = updater(prev);
-      localStorage.setItem("academic_structure", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  const setNoDueStatus = useCallback((
-    studentId: string, facultyId: string, subject: string,
+  const setNoDueStatus = useCallback(async (
+    studentId: string, facultyId: string, subjectName: string,
     dept: string, year: number, section: string,
     status: "cleared" | "pending", message?: string
   ) => {
-    setNoDueRecordsState(prev => {
-      const idx = prev.findIndex(r => r.student_id === studentId && r.subject === subject);
-      const record: NoDueRecord = {
-        student_id: studentId,
-        faculty_id: facultyId,
-        subject,
-        department: dept,
-        year,
-        section,
-        status,
-        message: message ?? prev[idx]?.message,
-      };
-      const updated = idx >= 0
-        ? prev.map((r, i) => i === idx ? record : r)
-        : [...prev, record];
-      localStorage.setItem("no_due_records", JSON.stringify(updated));
-      return updated;
-    });
+    try {
+      const record = await api.post('/nodue/set-status', { studentId, subjectName, status, message });
+      setNoDueRecordsState(prev => {
+        const idx = prev.findIndex(r => r.student_id === studentId && r.subject === subjectName);
+        const newRecord: NoDueRecord = {
+          student_id: studentId,
+          faculty_id: facultyId,
+          subject: subjectName,
+          department: dept,
+          year,
+          section,
+          status,
+          message: message ?? prev[idx]?.message,
+        };
+        return idx >= 0 ? prev.map((r, i) => i === idx ? newRecord : r) : [...prev, newRecord];
+      });
+    } catch (err) {
+      console.error("Update failed", err);
+    }
   }, []);
 
-  const updateNoDueMessage = useCallback((studentId: string, subject: string, message: string) => {
-    setNoDueRecordsState(prev => {
-      const updated = prev.map(r =>
-        r.student_id === studentId && r.subject === subject
-          ? { ...r, message }
-          : r
-      );
-      localStorage.setItem("no_due_records", JSON.stringify(updated));
-      return updated;
-    });
+  const updateNoDueMessage = useCallback(async (studentId: string, subject: string, message: string) => {
+    try {
+      await api.post('/nodue/update-message', { studentId, subjectName: subject, message });
+      setNoDueRecordsState(prev => prev.map(r =>
+        r.student_id === studentId && r.subject === subject ? { ...r, message } : r
+      ));
+    } catch (err) {
+      console.error("Update failed", err);
+    }
   }, []);
 
   const getNoDueRecord = useCallback((studentId: string, subject: string) => {
     return noDueRecords.find(r => r.student_id === studentId && r.subject === subject);
   }, [noDueRecords]);
 
-  const login = useCallback((role: UserRole, id: string, password: string): boolean => {
-    if (role === "admin") {
-      if (id === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        const newAuth = { isLoggedIn: true, role: "admin" as UserRole, userId: "admin" };
-        setAuth(newAuth);
-        localStorage.setItem("auth", JSON.stringify(newAuth));
-        return true;
-      }
-      return false;
+  const resetAllData = useCallback(async () => {
+    try {
+      await api.post('/academic/reset', {});
+      setAcademicStructureState(null);
+      setStudentsState([]);
+      setFacultyState([]);
+      setNoDueRecordsState([]);
+    } catch (err) {
+      console.error("Reset failed", err);
     }
-    if (role === "faculty") {
-      const f = faculty.find(f => f.faculty_id === id && f.password === password);
-      if (f) {
-        const newAuth = { isLoggedIn: true, role: "faculty" as UserRole, userId: f.faculty_id };
-        setAuth(newAuth);
-        localStorage.setItem("auth", JSON.stringify(newAuth));
-        return true;
-      }
-      return false;
-    }
-    if (role === "student") {
-      const s = students.find(s => s.student_id === id && s.password === password);
-      if (s) {
-        const newAuth = { isLoggedIn: true, role: "student" as UserRole, userId: s.student_id };
-        setAuth(newAuth);
-        localStorage.setItem("auth", JSON.stringify(newAuth));
-        return true;
-      }
-      return false;
-    }
-    return false;
-  }, [faculty, students]);
-
-  const logout = useCallback(() => {
-    const newAuth = { isLoggedIn: false, role: null, userId: null };
-    setAuth(newAuth);
-    localStorage.setItem("auth", JSON.stringify(newAuth));
   }, []);
 
-  const resetAllData = useCallback(() => {
-    setAcademicStructureState(null);
-    setStudentsState([]);
-    setFacultyState([]);
-    setNoDueRecordsState([]);
-    localStorage.removeItem("academic_structure");
-    localStorage.removeItem("students");
-    localStorage.removeItem("faculty");
-    localStorage.removeItem("no_due_records");
+  // Basic update functions (could be migrated to API later if needed)
+  const updateStudents = useCallback((updater: (prev: Student[]) => Student[]) => {
+    setStudentsState(prev => updater(prev));
   }, []);
 
-  const isDataLoaded = !!academicStructure && students.length > 0 && faculty.length > 0;
+  const updateFaculty = useCallback((updater: (prev: Faculty[]) => Faculty[]) => {
+    setFacultyState(prev => updater(prev));
+  }, []);
+
+  const updateAcademicStructure = useCallback((updater: (prev: AcademicStructure) => AcademicStructure) => {
+    setAcademicStructureState(prev => prev ? updater(prev) : null);
+  }, []);
+
+  const isDataLoaded = !!academicStructure;
 
   return (
     <DataContext.Provider value={{

@@ -108,8 +108,8 @@ const FacultyDashboard: React.FC = () => {
                   key={i}
                   onClick={() => setSelectedAssignment(a)}
                   className={`w-full text-left p-4 rounded-lg border transition-colors shadow-card ${selectedAssignment === a
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card hover:bg-secondary"
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card hover:bg-secondary"
                     }`}
                 >
                   <p className="font-semibold text-card-foreground">
@@ -151,9 +151,9 @@ const FacultyDashboard: React.FC = () => {
                               student={s}
                               assignment={selectedAssignment}
                               record={getNoDueRecord(s.student_id, selectedAssignment.subject)}
-                              onUpdateStatus={(status) => {
+                              onUpdateStatus={async (status) => {
                                 if (auth.userId) {
-                                  setNoDueStatus(
+                                  await setNoDueStatus(
                                     s.student_id,
                                     auth.userId,
                                     selectedAssignment.subject,
@@ -164,8 +164,8 @@ const FacultyDashboard: React.FC = () => {
                                   );
                                 }
                               }}
-                              onUpdateMessage={(msg) => {
-                                updateNoDueMessage(s.student_id, selectedAssignment.subject, msg);
+                              onUpdateMessage={async (msg) => {
+                                await updateNoDueMessage(s.student_id, selectedAssignment.subject, msg);
                               }}
                             />
                           ))}
@@ -193,8 +193,8 @@ const StudentRow: React.FC<{
   student: any;
   assignment: any;
   record: any;
-  onUpdateStatus: (status: "cleared" | "pending") => void;
-  onUpdateMessage: (msg: string) => void;
+  onUpdateStatus: (status: "cleared" | "pending") => Promise<void>;
+  onUpdateMessage: (msg: string) => Promise<void>;
 }> = ({ student, assignment, record, onUpdateStatus, onUpdateMessage }) => {
   const status = record?.status || "pending";
   const [msg, setMsg] = useState(record?.message || "");

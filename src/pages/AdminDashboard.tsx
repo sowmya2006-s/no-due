@@ -17,6 +17,7 @@ const AdminDashboard: React.FC = () => {
     academicStructure, students, faculty, logout, isDataLoaded,
     setAcademicStructure, setStudents, setFaculty,
     updateStudents, updateFaculty, updateAcademicStructure,
+    resetAllData
   } = useData();
 
   const [activeTab, setActiveTab] = useState<"upload" | "departments" | "students" | "faculty">(
@@ -253,7 +254,23 @@ const AdminDashboard: React.FC = () => {
         {/* Upload Tab */}
         {activeTab === "upload" && (
           <div className="max-w-lg space-y-4">
-            <h2 className="text-lg font-semibold font-heading">Upload Data Files</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold font-heading">Upload Data Files</h2>
+              {isDataLoaded && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm("Are you sure? This will delete all academic structure, student, and faculty data!")) {
+                      resetAllData();
+                    }
+                  }}
+                  className="h-8"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Reset All Data
+                </Button>
+              )}
+            </div>
             {(["academic", "students", "faculty"] as const).map(type => (
               <Card key={type} className="shadow-card">
                 <CardContent className="p-4 flex items-center justify-between">

@@ -21,6 +21,7 @@ interface DataContextType {
   setNoDueStatus: (studentId: string, facultyId: string, subject: string, dept: string, year: number, section: string, status: "cleared" | "pending", message?: string) => void;
   updateNoDueMessage: (studentId: string, subject: string, message: string) => void;
   getNoDueRecord: (studentId: string, subject: string) => NoDueRecord | undefined;
+  resetAllData: () => void;
   isDataLoaded: boolean;
 }
 
@@ -178,6 +179,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("auth", JSON.stringify(newAuth));
   }, []);
 
+  const resetAllData = useCallback(() => {
+    setAcademicStructureState(null);
+    setStudentsState([]);
+    setFacultyState([]);
+    setNoDueRecordsState([]);
+    localStorage.removeItem("academic_structure");
+    localStorage.removeItem("students");
+    localStorage.removeItem("faculty");
+    localStorage.removeItem("no_due_records");
+  }, []);
+
   const isDataLoaded = !!academicStructure && students.length > 0 && faculty.length > 0;
 
   return (
@@ -185,7 +197,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       academicStructure, students, faculty, noDueRecords, auth,
       setAcademicStructure, setStudents, setFaculty,
       login, logout, updateStudents, updateFaculty, updateAcademicStructure,
-      setNoDueStatus, updateNoDueMessage, getNoDueRecord,
+      setNoDueStatus, updateNoDueMessage, getNoDueRecord, resetAllData,
       isDataLoaded,
     }}>
       {children}

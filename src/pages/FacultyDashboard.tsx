@@ -20,6 +20,7 @@ const FacultyDashboard: React.FC = () => {
     academicStructure,
     students,
     faculty,
+    loading,
     logout,
     noDueRecords,
     setNoDueStatus,
@@ -27,7 +28,18 @@ const FacultyDashboard: React.FC = () => {
     getNoDueRecord,
   } = useData();
 
-  const currentFaculty = faculty.find((f) => f.faculty_id === auth.userId);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentFaculty = faculty.find((f) => f.faculty_id.trim() === auth.userId?.trim());
 
   // Find subjects assigned to this faculty
   const assignments: {
@@ -37,11 +49,12 @@ const FacultyDashboard: React.FC = () => {
     subject: string;
   }[] = [];
   if (academicStructure) {
+    const fId = auth.userId?.trim();
     academicStructure.departments.forEach((dept) => {
       dept.years.forEach((yr) => {
         yr.sections.forEach((sec) => {
           sec.subjects.forEach((sub) => {
-            if (sub.faculty_id === auth.userId) {
+            if (sub.faculty_id?.trim() === fId) {
               assignments.push({
                 dept: dept.name,
                 year: yr.year,
@@ -62,9 +75,9 @@ const FacultyDashboard: React.FC = () => {
   const assignmentStudents = selectedAssignment
     ? students.filter(
       (s) =>
-        s.department === selectedAssignment.dept &&
-        s.year === selectedAssignment.year &&
-        s.section === selectedAssignment.section
+        s.department.trim().toUpperCase() === selectedAssignment.dept.trim().toUpperCase() &&
+        Number(s.year) === Number(selectedAssignment.year) &&
+        s.section.trim().toUpperCase() === selectedAssignment.section.trim().toUpperCase()
     )
     : [];
 

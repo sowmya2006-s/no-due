@@ -26,16 +26,16 @@ model User {
 }
 
 model Department {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  years     Year[]
+  id    String @id @default(uuid())
+  name  String @unique
+  years Year[]
 }
 
 model Year {
   id           String     @id @default(uuid())
   year         Int
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   sections     Section[]
 
   @@unique([year, departmentId])
@@ -45,53 +45,56 @@ model Section {
   id       String    @id @default(uuid())
   section  String
   yearId   String
-  year     Year      @relation(fields: [yearId], references: [id])
+  year     Year      @relation(fields: [yearId], references: [id], onDelete: Cascade)
   subjects Subject[]
 
   @@unique([section, yearId])
 }
 
 model Subject {
-  id           String         @id @default(uuid())
-  name         String
-  sectionId    String
-  section      Section        @relation(fields: [sectionId], references: [id])
-  facultyId    String?
-  faculty      Faculty?       @relation(fields: [facultyId], references: [id])
-  noDueRecords NoDueRecord[]
+  id        String  @id @default(uuid())
+  name      String
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  facultyId String?
+  faculty   Faculty? @relation(fields: [facultyId], references: [facultyId])
 
   @@unique([name, sectionId])
 }
 
 model Student {
-  id           String         @id @default(uuid())
-  studentId    String         @unique
-  userId       String         @unique
-  user         User           @relation(fields: [userId], references: [id])
-  department   String
-  year         Int
-  section      String
-  noDueRecords NoDueRecord[]
+  id         String        @id @default(uuid())
+  studentId  String        @unique
+  name       String?
+  department String
+  year       Int
+  section    String
+  userId     String        @unique
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records    NoDueRecord[]
 }
 
 model Faculty {
-  id        String    @id @default(uuid())
-  facultyId String    @unique
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  name      String
+  id        String        @id @default(uuid())
+  facultyId String        @unique
+  name      String?
+  userId    String        @unique
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records   NoDueRecord[]
   subjects  Subject[]
 }
 
 model NoDueRecord {
   id        String   @id @default(uuid())
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  status    String   // "cleared" | "pending"
+  facultyId String
+  subject   String
+  status    String   @default("pending")
   message   String?
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  faculty   Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([studentId, subjectId])
+  @@unique([studentId, subject])
 }

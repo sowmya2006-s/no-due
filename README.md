@@ -1,73 +1,73 @@
-# Welcome to your Lovable project
+# NO DUE - Academic Portal
 
-## Project info
+A professional, full-stack application for managing student "No-Due" clearance in academic institutions. Featuring real-time dashboard updates, case-insensitive ID normalization, and bulk Excel data processing.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🚀 Tech Stack
 
-## How can I edit this code?
+- **Frontend**: React 18 (Vite) + TypeScript + Tailwind CSS
+- **UI Components**: Shadcn UI + Lucide React (Icons)
+- **Backend**: Node.js + Express 5
+- **Database**: PostgreSQL + Prisma 6 ORM
+- **Authentication**: JWT (JSON Web Tokens) + Bcrypt Hashing
+- **Data Management**: XLSX (SheetJS) for sample data processing
 
-There are several ways of editing your application.
+## 🛠️ Excel Data Formats
 
-**Use Lovable**
+The portal supports bulk uploads via Excel. Ensure your `.xlsx` files follow these column formats:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### 1. Students (`students_sample.xlsx`)
+| Student ID | Department | Year | Section | Password |
+| :--- | :--- | :--- | :--- | :--- |
+| S001 | CSE | 1 | A | stud123 |
+| S002 | AIML | 2 | B | stud123 |
 
-Changes made via Lovable will be committed automatically to this repo.
+### 2. Faculty (`faculty_sample.xlsx`)
+| Faculty ID | Name | Password |
+| :--- | :--- | :--- |
+| F001 | Dr. Kumar | fac123 |
+| F002 | Prof. Rao | fac123 |
 
-**Use your preferred IDE**
+### 3. Academic Structure (`academic_structure_sample.xlsx`)
+| Department | Year | Section | Subject | Faculty ID |
+| :--- | :--- | :--- | :--- | :--- |
+| CSE | 1 | A | Programming | F001 |
+| CSE | 1 | A | Mathematics | F002 |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+> [!TIP]
+> **Universal ID Normalization**: All IDs are automatically converted to **UPPERCASE**. Students can log in with `s001` or `S001`, and the system will correctly resolve their profile.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🔄 User Workflows
 
-Follow these steps:
+### 👑 Admin
+- **Setup**: Upload the institutional structure and bulk-import students/faculty.
+- **Granular Control**: Add or remove faculty members manually.
+- **Maintenance**: Reset system data for new academic cycles.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 🧑‍🏫 Faculty
+- **Clearing Dues**: View assigned subjects and toggle clearance status for students.
+- **Communication**: Leave specific messages/requirements (e.g., "Submit lab record").
+- **Filtering**: Quick-filter student lists by Department, Year, and Section.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 🎓 Student
+- **Real-time Status**: Instantly see which subjects are cleared or pending.
+- **Feedback**: View direct messages from faculty regarding missing requirements.
+- **Secure Access**: Profile-based dashboard with JWT security.
 
-# Step 3: Install the necessary dependencies.
-npm i
+## 🚦 Getting Started
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+1. **Prerequisites**: Node.js (v18+) and a running PostgreSQL instance.
+2. **Install Dependencies**:
+   ```bash
+   npm install && cd server && npm install
+   ```
+3. **Environment**: Update `server/.env` with your `DATABASE_URL` and `JWT_SECRET`.
+4. **Deploy Database**:
+   ```bash
+   npx prisma migrate dev && node prisma/seed.js
+   ```
+5. **Run App**: 
+   ```bash
+   npm run start-all
+   ```
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Access the portal at **http://localhost:8080**.

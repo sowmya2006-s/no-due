@@ -1,0 +1,16 @@
+[
+    {
+        "student_id": "S001",
+        "password": "student123",
+        "department": "CSE",
+        "year": 1,
+        "section": "A"
+    },
+    {
+        "student_id": "S002",
+        "password": "student123",
+        "department": "CSE",
+        "year": 2,
+        "section": "B"
+    }
+]

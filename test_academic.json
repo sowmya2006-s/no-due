@@ -1,0 +1,37 @@
+{
+    "departments": [
+        {
+            "name": "CSE",
+            "years": [
+                {
+                    "year": 1,
+                    "sections": [
+                        {
+                            "section": "A",
+                            "subjects": [
+                                {
+                                    "subject": "Programming",
+                                    "faculty_id": "F101"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "year": 2,
+                    "sections": [
+                        {
+                            "section": "B",
+                            "subjects": [
+                                {
+                                    "subject": "Data Structures",
+                                    "faculty_id": "F101"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

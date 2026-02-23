@@ -16,26 +16,37 @@ const isFaculty = (req, res, next) => {
 // Set No Due Status
 router.post('/set-status', auth, isFaculty, async (req, res) => {
     const { studentId, subjectName, status, message } = req.body;
+    const normalizedStudentId = String(studentId).trim().toUpperCase();
 
     try {
-        const student = await prisma.student.findUnique({ where: { studentId } });
+        const student = await prisma.student.findUnique({ where: { studentId: normalizedStudentId } });
         const subject = await prisma.subject.findFirst({ where: { name: subjectName } });
 
         if (!student || !subject) {
             return res.status(404).json({ message: 'Student or Subject not found' });
         }
 
+        const currentFaculty = await prisma.faculty.findUnique({ where: { facultyId: req.user.username } });
+        if (!currentFaculty) {
+            return res.status(403).json({ message: 'Faculty profile not found' });
+        }
+
         const record = await prisma.noDueRecord.upsert({
             where: {
-                studentId_subjectId: {
+                studentId_subject: {
                     studentId: student.id,
-                    subjectId: subject.id
+                    subject: subjectName
                 }
             },
-            update: { status, message },
+            update: {
+                status,
+                message,
+                facultyId: currentFaculty.id
+            },
             create: {
                 studentId: student.id,
-                subjectId: subject.id,
+                facultyId: currentFaculty.id,
+                subject: subjectName,
                 status,
                 message
             }
@@ -50,9 +61,10 @@ router.post('/set-status', auth, isFaculty, async (req, res) => {
 // Update Message Only
 router.post('/update-message', auth, isFaculty, async (req, res) => {
     const { studentId, subjectName, message } = req.body;
+    const normalizedStudentId = String(studentId).trim().toUpperCase();
 
     try {
-        const student = await prisma.student.findUnique({ where: { studentId } });
+        const student = await prisma.student.findUnique({ where: { studentId: normalizedStudentId } });
         const subject = await prisma.subject.findFirst({ where: { name: subjectName } });
 
         if (!student || !subject) {
@@ -61,9 +73,9 @@ router.post('/update-message', auth, isFaculty, async (req, res) => {
 
         const record = await prisma.noDueRecord.update({
             where: {
-                studentId_subjectId: {
+                studentId_subject: {
                     studentId: student.id,
-                    subjectId: subject.id
+                    subject: subjectName
                 }
             },
             data: { message }
@@ -75,6 +87,26 @@ router.post('/update-message', auth, isFaculty, async (req, res) => {
     }
 });
 
+// Get all records (For Admin and Faculty Dashboards)
+router.get('/all-records', auth, isFaculty, async (req, res) => {
+    try {
+        const records = await prisma.noDueRecord.findMany({
+            include: { student: true, faculty: true }
+        });
+        // Map to frontend expectation
+        const mapped = records.map(r => ({
+            student_id: r.student.studentId,
+            faculty_id: r.faculty.facultyId,
+            subject: r.subject,
+            status: r.status,
+            message: r.message
+        }));
+        res.json(mapped);
+    } catch (err) {
+        res.status(500).json({ message: 'Error fetching records', error: err.message });
+    }
+});
+
 // Get records for a specific student (For Student Dashboard)
 router.get('/student-records', auth, async (req, res) => {
     try {
@@ -82,10 +114,17 @@ router.get('/student-records', auth, async (req, res) => {
         if (!student) return res.status(404).json({ message: 'Student profile not found' });
 
         const records = await prisma.noDueRecord.findMany({
-            where: { studentId: student.id },
-            include: { subject: true }
+            where: { studentId: student.id }
         });
-        res.json(records);
+        // Map to frontend
+        const mapped = records.map(r => ({
+            student_id: student.studentId,
+            faculty_id: "system",
+            subject: r.subject,
+            status: r.status,
+            message: r.message
+        }));
+        res.json(mapped);
     } catch (err) {
         res.status(500).json({ message: 'Error fetching records', error: err.message });
     }

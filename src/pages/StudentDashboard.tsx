@@ -6,11 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, BookOpen, User, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
 
 const StudentDashboard: React.FC = () => {
-  const { auth, academicStructure, students, faculty, logout, getNoDueRecord } = useData();
+  const { auth, academicStructure, students, faculty, loading, logout, getNoDueRecord } = useData();
 
-  const currentStudent = students.find(s => s.student_id === auth.userId);
+  // If we are a student, we only fetch our own profile, so it's always students[0]
+  const currentStudent = auth.role?.toLowerCase() === 'student' ? students[0] : students.find(s => s.student_id.trim().toUpperCase() === auth.userId?.trim().toUpperCase());
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Find subjects for this student
+  let errorMsg = "No data available. Please ask admin to upload academic data.";
   const subjectsWithFaculty: {
     subject: string;
     facultyName: string;
@@ -19,24 +32,40 @@ const StudentDashboard: React.FC = () => {
     message?: string;
   }[] = [];
 
-  if (academicStructure && currentStudent) {
-    const dept = academicStructure.departments.find(d => d.name === currentStudent.department);
-    if (dept) {
-      const yr = dept.years.find(y => y.year === currentStudent.year);
-      if (yr) {
-        const sec = yr.sections.find(s => s.section === currentStudent.section);
-        if (sec) {
+  if (!currentStudent) {
+    errorMsg = `Student profile not found for ID: ${auth.userId}. Please contact admin.`;
+  } else if (academicStructure) {
+    const sDept = currentStudent.department.trim().toUpperCase();
+    const sSec = currentStudent.section.trim().toUpperCase();
+    const sYear = Number(currentStudent.year);
+
+    const dept = academicStructure.departments.find(d => d.name.trim().toUpperCase() === sDept);
+
+    if (!dept) {
+      errorMsg = `Department "${sDept}" not found in academic structure.`;
+    } else {
+      const yr = dept.years.find(y => Number(y.year) === sYear);
+      if (!yr) {
+        errorMsg = `Year ${sYear} not found for department ${sDept}.`;
+      } else {
+        const sec = yr.sections.find(s => s.section.trim().toUpperCase() === sSec);
+        if (!sec) {
+          errorMsg = `Section "${sSec}" not found for ${sDept} Year ${sYear}.`;
+        } else {
           sec.subjects.forEach(sub => {
-            const fac = faculty.find(f => f.faculty_id === sub.faculty_id);
+            const fac = faculty.find(f => f.faculty_id.trim() === (sub.faculty_id || "").trim());
             const record = getNoDueRecord(currentStudent.student_id, sub.subject);
             subjectsWithFaculty.push({
               subject: sub.subject,
-              facultyName: fac?.name || sub.faculty_id,
-              facultyId: sub.faculty_id,
+              facultyName: fac?.name || sub.faculty_id || "Unassigned",
+              facultyId: sub.faculty_id || "None",
               status: record?.status || "pending",
               message: record?.message,
             });
           });
+          if (subjectsWithFaculty.length === 0) {
+            errorMsg = `No subjects found for ${sDept} Year ${sYear} Section ${sSec}.`;
+          }
         }
       }
     }
@@ -79,8 +108,12 @@ const StudentDashboard: React.FC = () => {
         </h2>
 
         {subjectsWithFaculty.length === 0 ? (
-          <Card className="shadow-card p-8 text-center">
-            <p className="text-muted-foreground">No data available. Please ask admin to upload academic data.</p>
+          <Card className="shadow-card p-8 text-center border-destructive/20 bg-destructive/5">
+            <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-4 opacity-50" />
+            <p className="text-muted-foreground font-medium">{errorMsg}</p>
+            <p className="text-xs text-muted-foreground/60 mt-2">
+              Tip: Ensure all data in Excel files is consistent and has been uploaded by the admin.
+            </p>
           </Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

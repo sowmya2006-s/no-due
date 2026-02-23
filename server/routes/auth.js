@@ -29,11 +29,12 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
     const { username, password, role } = req.body;
+    const normalizedUsername = String(username).trim().toUpperCase();
 
     try {
         const user = await prisma.user.findFirst({
             where: {
-                username,
+                username: normalizedUsername,
                 role: role.toUpperCase()
             }
         });

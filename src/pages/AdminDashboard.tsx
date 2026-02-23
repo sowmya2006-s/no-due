@@ -16,8 +16,9 @@ const AdminDashboard: React.FC = () => {
   const {
     academicStructure, students, faculty, logout, isDataLoaded,
     setAcademicStructure, setStudents, setFaculty,
-    updateStudents, updateFaculty, updateAcademicStructure,
-    resetAllData
+    promoteStudents, updateStudentSection, resetPassword,
+    addFaculty, removeFaculty, addSubject, changeFaculty,
+    resetAllData, removeStructure, removeStudents, removeFacultyAll
   } = useData();
 
   const [activeTab, setActiveTab] = useState<"upload" | "departments" | "students" | "faculty">(
@@ -36,19 +37,19 @@ const AdminDashboard: React.FC = () => {
   const parseExcelStudents = (sheet: XLSX.WorkSheet): Student[] => {
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
     return rows.map(r => ({
-      student_id: String(r["student_id"] ?? r["Student ID"] ?? r["StudentID"] ?? ""),
+      student_id: String(r["student_id"] ?? r["Student ID"] ?? r["StudentID"] ?? "").trim(),
       password: String(r["password"] ?? r["Password"] ?? "default123"),
-      department: String(r["department"] ?? r["Department"] ?? r["Dept"] ?? ""),
+      department: String(r["department"] ?? r["Department"] ?? r["Dept"] ?? "").trim(),
       year: Number(r["year"] ?? r["Year"] ?? 1),
-      section: String(r["section"] ?? r["Section"] ?? "A"),
+      section: String(r["section"] ?? r["Section"] ?? "A").trim(),
     })).filter(s => s.student_id && s.department);
   };
 
   const parseExcelFaculty = (sheet: XLSX.WorkSheet): Faculty[] => {
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
     return rows.map(r => ({
-      faculty_id: String(r["faculty_id"] ?? r["Faculty ID"] ?? r["FacultyID"] ?? ""),
-      name: String(r["name"] ?? r["Name"] ?? ""),
+      faculty_id: String(r["faculty_id"] ?? r["Faculty ID"] ?? r["FacultyID"] ?? "").trim(),
+      name: String(r["name"] ?? r["Name"] ?? "").trim(),
       password: String(r["password"] ?? r["Password"] ?? "default123"),
     })).filter(f => f.faculty_id && f.name);
   };
@@ -122,82 +123,61 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const promoteStudents = (dept: string, fromYear: number) => {
-    updateStudents(prev =>
-      prev.map(s => s.department === dept && s.year === fromYear ? { ...s, year: s.year + 1 } : s)
-    );
-  };
-
-  const updateStudentSection = (studentId: string, newSection: string) => {
-    updateStudents(prev =>
-      prev.map(s => s.student_id === studentId ? { ...s, section: newSection } : s)
-    );
-  };
-
-  const resetPassword = (type: "student" | "faculty", id: string) => {
-    if (type === "student") {
-      updateStudents(prev =>
-        prev.map(s => s.student_id === id ? { ...s, password: "reset123" } : s)
-      );
-    } else {
-      updateFaculty(prev =>
-        prev.map(f => f.faculty_id === id ? { ...f, password: "reset123" } : f)
-      );
+  const handlePromote = async (dept: string, fromYear: number) => {
+    if (window.confirm(`Promote all Year ${fromYear} students in ${dept}?`)) {
+      await promoteStudents(dept, fromYear);
     }
   };
 
-  const changeFaculty = (dept: string, year: number, section: string, subject: string, newFacultyId: string) => {
-    updateAcademicStructure(prev => ({
-      ...prev,
-      departments: prev.departments.map(d =>
-        d.name === dept ? {
-          ...d,
-          years: d.years.map(y =>
-            y.year === year ? {
-              ...y,
-              sections: y.sections.map(sec =>
-                sec.section === section ? {
-                  ...sec,
-                  subjects: sec.subjects.map(sub =>
-                    sub.subject === subject ? { ...sub, faculty_id: newFacultyId } : sub
-                  )
-                } : sec
-              )
-            } : y
-          )
-        } : d
-      )
-    }));
+  const handleUpdateSection = async (studentId: string, newSection: string) => {
+    await updateStudentSection(studentId, newSection);
   };
 
-  const addSubject = (dept: string, year: number, section: string, subject: string, facultyId: string) => {
-    updateAcademicStructure(prev => ({
-      ...prev,
-      departments: prev.departments.map(d =>
-        d.name === dept ? {
-          ...d,
-          years: d.years.map(y =>
-            y.year === year ? {
-              ...y,
-              sections: y.sections.map(sec =>
-                sec.section === section ? {
-                  ...sec,
-                  subjects: [...sec.subjects, { subject, faculty_id: facultyId }]
-                } : sec
-              )
-            } : y
-          )
-        } : d
-      )
-    }));
+  const handleResetPassword = async (type: "student" | "faculty", id: string) => {
+    await resetPassword(id);
   };
 
-  const addFaculty = (id: string, name: string) => {
-    updateFaculty(prev => [...prev, { faculty_id: id, name, password: "default123" }]);
+  const handleAddFaculty = async () => {
+    if (newFacultyId && newFacultyName) {
+      await addFaculty(newFacultyId, newFacultyName);
+      setNewFacultyId("");
+      setNewFacultyName("");
+    }
   };
 
-  const removeFaculty = (id: string) => {
-    updateFaculty(prev => prev.filter(f => f.faculty_id !== id));
+  const handleRemoveFaculty = async (id: string) => {
+    if (window.confirm("Are you sure you want to remove this faculty member?")) {
+      await removeFaculty(id);
+    }
+  };
+
+  const handleChangeFaculty = async (subjectId: string, newFacultyId: string) => {
+    await changeFaculty(subjectId, newFacultyId);
+  };
+
+  const handleAddSubject = async (dept: string, year: number, section: string, subject: string, facultyId: string) => {
+    await addSubject(dept, year, section, subject, facultyId);
+  };
+
+  const handleReset = async () => {
+    if (window.confirm("Are you sure? This will delete all academic structure, student, and faculty data!")) {
+      await resetAllData();
+      setUploadStatus({});
+    }
+  };
+
+  const handleIndividualRemove = async (type: "academic" | "students" | "faculty") => {
+    if (window.confirm(`Are you sure you want to remove all ${type === "academic" ? "academic structure" : type} data?`)) {
+      if (type === "academic") await removeStructure();
+      else if (type === "students") await removeStudents();
+      else await removeFacultyAll();
+
+      setUploadStatus(prev => {
+        const next = { ...prev };
+        delete next[type];
+        return next;
+      });
+    }
   };
 
   const getFacultyName = (id: string) => faculty.find(f => f.faculty_id === id)?.name || id;
@@ -264,11 +244,7 @@ const AdminDashboard: React.FC = () => {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => {
-                    if (window.confirm("Are you sure? This will delete all academic structure, student, and faculty data!")) {
-                      resetAllData();
-                    }
-                  }}
+                  onClick={handleReset}
                   className="h-8"
                 >
                   <Trash2 className="h-4 w-4 mr-2" /> Reset All Data
@@ -284,9 +260,18 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     {uploadStatus[type] && (
-                      <span className={`text-sm ${uploadStatus[type].startsWith("✓") ? "text-success" : "text-destructive"}`}>
-                        {uploadStatus[type]}
-                      </span>
+                      <div className="flex items-center gap-1.5 mr-2">
+                        <span className={`text-sm ${uploadStatus[type].startsWith("✓") ? "text-success" : "text-destructive"}`}>
+                          {uploadStatus[type]}
+                        </span>
+                        <button
+                          onClick={() => handleIndividualRemove(type)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                          title="Remove data"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     )}
                     <input
                       type="file"
@@ -345,7 +330,7 @@ const AdminDashboard: React.FC = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={(e) => { e.stopPropagation(); promoteStudents(dept.name, yr.year); }}
+                              onClick={(e) => { e.stopPropagation(); handlePromote(dept.name, yr.year); }}
                             >
                               <ArrowUpCircle className="h-3 w-3 mr-1" /> Promote
                             </Button>
@@ -364,7 +349,7 @@ const AdminDashboard: React.FC = () => {
                                         <span className="text-muted-foreground">{getFacultyName(sub.faculty_id)}</span>
                                         <Select
                                           value={sub.faculty_id}
-                                          onValueChange={(val) => changeFaculty(dept.name, yr.year, sec.section, sub.subject, val)}
+                                          onValueChange={(val) => handleChangeFaculty(sub.id, val)}
                                         >
                                           <SelectTrigger className="w-32 h-7 text-xs">
                                             <SelectValue />
@@ -386,7 +371,7 @@ const AdminDashboard: React.FC = () => {
                                     year={yr.year}
                                     section={sec.section}
                                     faculty={faculty}
-                                    onAdd={addSubject}
+                                    onAdd={handleAddSubject}
                                   />
                                 </div>
                               </div>
@@ -439,11 +424,11 @@ const AdminDashboard: React.FC = () => {
                           <Input
                             className="w-16 h-7 text-xs"
                             defaultValue={s.section}
-                            onBlur={e => updateStudentSection(s.student_id, e.target.value)}
+                            onBlur={e => handleUpdateSection(s.student_id, e.target.value)}
                           />
                         </td>
                         <td className="p-3">
-                          <Button size="sm" variant="ghost" onClick={() => resetPassword("student", s.student_id)}>
+                          <Button size="sm" variant="ghost" onClick={() => handleResetPassword("student", s.student_id)}>
                             Reset PW
                           </Button>
                         </td>
@@ -481,13 +466,7 @@ const AdminDashboard: React.FC = () => {
                   <Input placeholder="Name" value={newFacultyName} onChange={e => setNewFacultyName(e.target.value)} />
                   <Button
                     size="sm"
-                    onClick={() => {
-                      if (newFacultyId && newFacultyName) {
-                        addFaculty(newFacultyId, newFacultyName);
-                        setNewFacultyId("");
-                        setNewFacultyName("");
-                      }
-                    }}
+                    onClick={handleAddFaculty}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Add
                   </Button>
@@ -511,10 +490,10 @@ const AdminDashboard: React.FC = () => {
                         <td className="p-3 font-mono text-xs">{f.faculty_id}</td>
                         <td className="p-3">{f.name}</td>
                         <td className="p-3 flex gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => resetPassword("faculty", f.faculty_id)}>
+                          <Button size="sm" variant="ghost" onClick={() => handleResetPassword("faculty", f.faculty_id)}>
                             Reset PW
                           </Button>
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeFaculty(f.faculty_id)}>
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleRemoveFaculty(f.faculty_id)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </td>

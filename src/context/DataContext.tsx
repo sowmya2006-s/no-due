@@ -16,11 +16,22 @@ interface DataContextType {
   updateStudents: (updater: (prev: Student[]) => Student[]) => void;
   updateFaculty: (updater: (prev: Faculty[]) => Faculty[]) => void;
   updateAcademicStructure: (updater: (prev: AcademicStructure) => AcademicStructure) => void;
+  promoteStudents: (dept: string, fromYear: number) => Promise<void>;
+  updateStudentSection: (studentId: string, section: string) => Promise<void>;
+  resetPassword: (username: string) => Promise<void>;
+  addFaculty: (id: string, name: string) => Promise<void>;
+  removeFaculty: (id: string) => Promise<void>;
+  addSubject: (dept: string, year: number, section: string, name: string, facultyId: string) => Promise<void>;
+  changeFaculty: (subjectId: string, facultyId: string) => Promise<void>;
   setNoDueStatus: (studentId: string, facultyId: string, subject: string, dept: string, year: number, section: string, status: "cleared" | "pending", message?: string) => Promise<void>;
   updateNoDueMessage: (studentId: string, subject: string, message: string) => Promise<void>;
   getNoDueRecord: (studentId: string, subject: string) => NoDueRecord | undefined;
   resetAllData: () => Promise<void>;
+  removeStructure: () => Promise<void>;
+  removeStudents: () => Promise<void>;
+  removeFacultyAll: () => Promise<void>;
   isDataLoaded: boolean;
+  loading: boolean;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -36,6 +47,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [students, setStudentsState] = useState<Student[]>([]);
   const [faculty, setFacultyState] = useState<Faculty[]>([]);
   const [noDueRecords, setNoDueRecordsState] = useState<NoDueRecord[]>([]);
+  const [loading, setLoading] = useState(() => {
+    const saved = localStorage.getItem("auth");
+    if (!saved) return false;
+    const authData = JSON.parse(saved);
+    return authData.isLoggedIn;
+  });
   const [auth, setAuth] = useState<AuthState>(() => {
     const saved = localStorage.getItem("auth");
     return saved ? JSON.parse(saved) : { isLoggedIn: false, role: null, userId: null };
@@ -43,36 +60,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchData = useCallback(async () => {
     if (!auth.isLoggedIn) return;
+    setLoading(true);
     try {
       const structure = await api.get('/academic/structure');
       setAcademicStructureState({ departments: structure });
 
-      if (auth.role === 'admin') {
-        const [studentsData, facultyData] = await Promise.all([
+      const userRole = auth.role?.toLowerCase();
+
+      if (userRole === 'admin') {
+        const [studentsData, facultyData, allRecords] = await Promise.all([
           api.get('/academic/students'),
-          api.get('/academic/faculty')
+          api.get('/academic/faculty'),
+          api.get('/nodue/all-records')
         ]);
         setStudentsState(studentsData);
         setFacultyState(facultyData);
-      } else if (auth.role === 'student') {
-        const [records, profile] = await Promise.all([
-          api.get('/nodue/student-records'),
-          api.get('/academic/profile')
+        setNoDueRecordsState(allRecords);
+      } else if (userRole === 'student') {
+        try {
+          const [records, profile, facultyData] = await Promise.all([
+            api.get('/nodue/student-records'),
+            api.get('/academic/profile'),
+            api.get('/academic/faculty') // Need faculty names
+          ]);
+          setNoDueRecordsState(records);
+          setStudentsState([profile]);
+          setFacultyState(facultyData);
+        } catch (err: any) {
+          if (err.status === 404 || err.status === 401) {
+            console.error("Profile not found or session stale, logging out", err);
+            logout();
+          } else {
+            throw err;
+          }
+        }
+      } else if (userRole === 'faculty') {
+        const [profile, allRecords, studentsData, facultyData] = await Promise.all([
+          api.get('/academic/profile'),
+          api.get('/nodue/all-records'),
+          api.get('/academic/students'),
+          api.get('/academic/faculty')
         ]);
-        setNoDueRecordsState(records.map((r: any) => ({
-          student_id: auth.userId,
-          faculty_id: r.subject.facultyId,
-          subject: r.subject.name,
-          status: r.status,
-          message: r.message
-        })));
-        setStudentsState([profile]);
-      } else if (auth.role === 'faculty') {
-        const profile = await api.get('/academic/profile');
-        setFacultyState([profile]);
+        setFacultyState(facultyData);
+        setNoDueRecordsState(allRecords);
+        setStudentsState(studentsData);
       }
     } catch (err) {
       console.error("Failed to fetch data", err);
+    } finally {
+      setLoading(false);
     }
   }, [auth]);
 
@@ -88,6 +124,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: res.user.role.toLowerCase() as UserRole,
         userId: id
       };
+      setLoading(true);
       setAuth(newAuth);
       localStorage.setItem("auth", JSON.stringify(newAuth));
       localStorage.setItem("token", res.token);
@@ -101,6 +138,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(() => {
     const newAuth = { isLoggedIn: false, role: null, userId: null };
     setAuth(newAuth);
+    setLoading(false);
     localStorage.removeItem("auth");
     localStorage.removeItem("token");
     setAcademicStructureState(null);
@@ -112,29 +150,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setAcademicStructure = useCallback(async (data: AcademicStructure) => {
     try {
       await api.post('/academic/upload-structure', data);
-      setAcademicStructureState(data);
+      await fetchData();
     } catch (err) {
       console.error("Upload failed", err);
     }
-  }, []);
+  }, [fetchData]);
 
   const setStudents = useCallback(async (data: Student[]) => {
     try {
       await api.post('/academic/upload-students', { students: data });
-      setStudentsState(data);
+      await fetchData();
     } catch (err) {
       console.error("Upload failed", err);
     }
-  }, []);
+  }, [fetchData]);
 
   const setFaculty = useCallback(async (data: Faculty[]) => {
     try {
       await api.post('/academic/upload-faculty', { faculty: data });
-      setFacultyState(data);
+      await fetchData();
     } catch (err) {
       console.error("Upload failed", err);
     }
-  }, []);
+  }, [fetchData]);
 
   const setNoDueStatus = useCallback(async (
     studentId: string, facultyId: string, subjectName: string,
@@ -189,7 +227,97 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Basic update functions (could be migrated to API later if needed)
+  const removeStructure = useCallback(async () => {
+    try {
+      await api.delete('/academic/remove-structure');
+      setAcademicStructureState(null);
+    } catch (err) {
+      console.error("Remove structure failed", err);
+    }
+  }, []);
+
+  const removeStudents = useCallback(async () => {
+    try {
+      await api.delete('/academic/remove-students');
+      setStudentsState([]);
+    } catch (err) {
+      console.error("Remove students failed", err);
+    }
+  }, []);
+
+  const removeFacultyAll = useCallback(async () => {
+    try {
+      await api.delete('/academic/remove-faculty-all');
+      setFacultyState([]);
+    } catch (err) {
+      console.error("Remove faculty all failed", err);
+    }
+  }, []);
+
+  const promoteStudents = useCallback(async (department: string, fromYear: number) => {
+    try {
+      await api.post('/academic/promote-students', { department, fromYear });
+      await fetchData();
+    } catch (err) {
+      console.error("Promotion failed", err);
+    }
+  }, [fetchData]);
+
+  const updateStudentSection = useCallback(async (studentId: string, section: string) => {
+    try {
+      await api.patch('/academic/update-student-section', { studentId, section });
+      await fetchData();
+    } catch (err) {
+      console.error("Section update failed", err);
+    }
+  }, [fetchData]);
+
+  const resetPassword = useCallback(async (username: string) => {
+    try {
+      await api.post('/academic/reset-password', { username });
+      alert("Password reset to reset123");
+    } catch (err) {
+      console.error("Reset failed", err);
+    }
+  }, []);
+
+  const addFaculty = useCallback(async (facultyId: string, name: string) => {
+    try {
+      await api.post('/academic/add-faculty', { facultyId, name });
+      await fetchData();
+    } catch (err) {
+      console.error("Add faculty failed", err);
+    }
+  }, [fetchData]);
+
+  const removeFaculty = useCallback(async (id: string) => {
+    try {
+      await api.delete(`/academic/remove-faculty/${id}`);
+      await fetchData();
+    } catch (err) {
+      console.error("Remove faculty failed", err);
+    }
+  }, [fetchData]);
+
+  const addSubject = useCallback(async (department: string, year: number, section: string, name: string, facultyId: string) => {
+    try {
+      await api.post('/academic/add-subject', { department, year, section, name, facultyId });
+      await fetchData();
+    } catch (err) {
+      console.error("Add subject failed", err);
+    }
+  }, [fetchData]);
+
+  const changeFaculty = useCallback(async (subjectId: string, facultyId: string) => {
+    try {
+      await api.patch('/academic/change-faculty', { subjectId, facultyId });
+      await fetchData();
+    } catch (err) {
+      console.error("Change faculty failed", err);
+    }
+  }, [fetchData]);
+
+  // Legacy update functions for local state management
   const updateStudents = useCallback((updater: (prev: Student[]) => Student[]) => {
     setStudentsState(prev => updater(prev));
   }, []);
@@ -209,8 +337,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       academicStructure, students, faculty, noDueRecords, auth,
       setAcademicStructure, setStudents, setFaculty,
       login, logout, updateStudents, updateFaculty, updateAcademicStructure,
+      promoteStudents, updateStudentSection, resetPassword, addFaculty, removeFaculty,
+      addSubject, changeFaculty,
       setNoDueStatus, updateNoDueMessage, getNoDueRecord, resetAllData,
-      isDataLoaded,
+      removeStructure, removeStudents, removeFacultyAll,
+      isDataLoaded, loading
     }}>
       {children}
     </DataContext.Provider>

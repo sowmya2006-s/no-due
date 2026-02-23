@@ -1,4 +1,5 @@
 export interface SubjectMapping {
+  id: string;
   subject: string;
   faculty_id: string;
 }
